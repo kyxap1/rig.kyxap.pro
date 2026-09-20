@@ -1,0 +1,218 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GuitarRig</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown.min.css">
+  <style>
+    .markdown-body {
+      box-sizing: border-box;
+      min-width: 200px;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 45px;
+    }
+    @media (max-width: 767px) {
+      .markdown-body {
+        padding: 15px;
+      }
+    }
+    markdown-accessiblity-table {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .rig-toolbar {
+      font-size: 14px;
+      margin-bottom: 1.5em;
+      padding-bottom: 1em;
+      border-bottom: 1px solid #d0d7de;
+    }
+    .rig-toolbar a {
+      margin-right: .5em;
+    }
+    .mermaid {
+      position: relative;
+      cursor: zoom-in;
+    }
+    .rig-expand {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 32px;
+      height: 32px;
+      line-height: 30px;
+      text-align: center;
+      background: #f6f8fa;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+    }
+    #zoom {
+      width: 100dvw;
+      height: 100dvh;
+      max-width: 100dvw;
+      max-height: 100dvh;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: #fff;
+    }
+    #zoom[open] {
+      display: flex;
+      flex-direction: column;
+    }
+    #zoom::backdrop {
+      background: rgba(0, 0, 0, .6);
+    }
+    .rig-zoom-bar {
+      display: flex;
+      gap: .5em;
+      padding: 8px;
+      border-bottom: 1px solid #d0d7de;
+    }
+    .rig-zoom-bar button {
+      min-width: 44px;
+      height: 44px;
+      font-size: 15px;
+      background: #f6f8fa;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .rig-zoom-bar button:last-child {
+      margin-left: auto;
+    }
+    #zoompane {
+      flex: 1;
+      overflow: auto;
+      touch-action: pan-x pan-y pinch-zoom;
+    }
+    #zoompane svg {
+      display: block;
+      margin: auto;
+    }
+  </style>
+</head>
+<body class="markdown-body">
+  <div class="rig-toolbar">
+    <a href="https://gist.github.com/kyxap1/adf8f7fedb612311d27b25520a9b545c" target="_blank" rel="noopener">View on GitHub</a> |
+    <a href="https://gist.github.com/kyxap1/adf8f7fedb612311d27b25520a9b545c/revisions" target="_blank" rel="noopener">Revisions</a> |
+    <a href="/">Reload</a> |
+    <a href="https://gist.github.com/kyxap1/adf8f7fedb612311d27b25520a9b545c/edit" target="_blank" rel="noopener">Edit</a> |
+    <a href="/raw">Raw</a>
+  </div>
+  <div id="c">Loading…</div>
+  <dialog id="zoom">
+    <div class="rig-zoom-bar">
+      <button id="zout">&minus;</button>
+      <button id="zin">+</button>
+      <button id="zfit">Fit</button>
+      <button id="zone">1:1</button>
+      <button id="zclose">&times;</button>
+    </div>
+    <div id="zoompane"></div>
+  </dialog>
+  <script type="module">
+    import GithubSlugger from "https://cdn.jsdelivr.net/npm/github-slugger/+esm";
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs";
+
+    const c = document.getElementById("c");
+    const raw = await (await fetch("/raw")).text();
+    const html = await (await fetch("https://api.github.com/markdown", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: raw, mode: "gfm" }),
+    })).text();
+    c.innerHTML = html;
+
+    const slugger = new GithubSlugger();
+    c.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach(function (h) {
+      h.id = slugger.slug(h.textContent);
+    });
+
+    mermaid.initialize({ startOnLoad: false });
+    for (const pre of c.querySelectorAll(".highlight-source-mermaid pre")) {
+      const div = document.createElement("div");
+      div.className = "mermaid";
+      div.textContent = pre.textContent;
+      // mermaid.run swaps the text for an svg, so keep the source for the zoomed re-render
+      div.dataset.src = pre.textContent;
+      pre.closest(".highlight-source-mermaid").replaceWith(div);
+    }
+    await mermaid.run({ querySelector: ".mermaid" });
+
+    const dlg = document.getElementById("zoom");
+    const pane = document.getElementById("zoompane");
+    let svg = null, nw = 0, nh = 0, k = 1, seq = 0;
+
+    function draw() {
+      svg.setAttribute("width", Math.round(nw * k));
+      svg.setAttribute("height", Math.round(nh * k));
+      svg.style.maxWidth = "none";
+    }
+
+    function fit() {
+      k = Math.min((pane.clientWidth - 16) / nw, (pane.clientHeight - 16) / nh);
+      draw();
+    }
+
+    // opening default: never below natural size, because fitting an 18:1 flowchart whole
+    // leaves the labels exactly as unreadable as they are in the page
+    function fill() {
+      k = Math.min(4, Math.max(1, Math.min((pane.clientWidth - 16) / nw, (pane.clientHeight - 16) / nh)));
+      draw();
+    }
+
+    function zoom(factor) {
+      k = Math.min(8, Math.max(.05, k * factor));
+      draw();
+    }
+
+    // the modal renders its own copy, so closing it needs no cleanup and the page copy stays put
+    async function open(box) {
+      const drawn = await mermaid.render("zoomed" + (++seq), box.dataset.src);
+      pane.innerHTML = drawn.svg;
+      svg = pane.querySelector("svg");
+      const vb = svg.viewBox.baseVal;
+      nw = vb.width;
+      nh = vb.height;
+      dlg.showModal();
+      fill();
+    }
+
+    for (const box of c.querySelectorAll(".mermaid")) {
+      const btn = document.createElement("div");
+      btn.className = "rig-expand";
+      btn.textContent = "\u2922";
+      box.appendChild(btn);
+      box.addEventListener("click", () => open(box));
+    }
+
+    document.getElementById("zin").onclick = () => zoom(1.25);
+    document.getElementById("zout").onclick = () => zoom(.8);
+    document.getElementById("zfit").onclick = fit;
+    document.getElementById("zone").onclick = () => { k = 1; draw(); };
+    document.getElementById("zclose").onclick = () => dlg.close();
+    window.addEventListener("resize", () => { if (dlg.open) fill(); });
+
+    // touch pans natively through overflow scroll; this is the mouse equivalent
+    let px = 0, py = 0;
+    pane.addEventListener("pointerdown", function (e) {
+      if (e.pointerType !== "mouse") return;
+      px = e.clientX;
+      py = e.clientY;
+      pane.setPointerCapture(e.pointerId);
+      pane.style.cursor = "grabbing";
+    });
+    pane.addEventListener("pointermove", function (e) {
+      if (!pane.hasPointerCapture(e.pointerId)) return;
+      pane.scrollLeft -= e.clientX - px;
+      pane.scrollTop -= e.clientY - py;
+      px = e.clientX;
+      py = e.clientY;
+    });
+    pane.addEventListener("pointerup", () => { pane.style.cursor = ""; });
+  </script>
+</body>
+</html>
