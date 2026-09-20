@@ -157,13 +157,6 @@
       draw();
     }
 
-    // opening default: never below natural size, because fitting an 18:1 flowchart whole
-    // leaves the labels exactly as unreadable as they are in the page
-    function fill() {
-      k = Math.min(4, Math.max(1, Math.min((pane.clientWidth - 16) / nw, (pane.clientHeight - 16) / nh)));
-      draw();
-    }
-
     function zoom(factor) {
       k = Math.min(8, Math.max(.05, k * factor));
       draw();
@@ -178,7 +171,7 @@
       nw = vb.width;
       nh = vb.height;
       dlg.showModal();
-      fill();
+      fit();
     }
 
     for (const box of c.querySelectorAll(".mermaid")) {
@@ -194,7 +187,7 @@
     document.getElementById("zfit").onclick = fit;
     document.getElementById("zone").onclick = () => { k = 1; draw(); };
     document.getElementById("zclose").onclick = () => dlg.close();
-    window.addEventListener("resize", () => { if (dlg.open) fill(); });
+    window.addEventListener("resize", () => { if (dlg.open) fit(); });
 
     // touch pans natively through overflow scroll; this is the mouse equivalent
     let px = 0, py = 0;
